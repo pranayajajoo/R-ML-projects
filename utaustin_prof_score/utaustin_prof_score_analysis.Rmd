@@ -1,0 +1,155 @@
+---
+title: "utaustin data"
+author: "Pranaya Jajoo"
+date: "2023-06-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+pulling data
+```{r}
+download.file("http://www.openintro.org/stat/data/evals.RData", destfile = "evals.RData")
+load("evals.RData")
+head(evals)
+summary(evals)
+```
+
+looking at the distribution of the score
+```{r}
+hist(evals$score)
+```
+
+looking at possible correlation between beauty and score
+```{r}
+score_bty_lm = lm(evals$score ~ evals$bty_avg)
+summary(score_bty_lm)
+plot(jitter(evals$score,factor=1.2) ~ jitter(evals$bty_avg,factor=1.2))
+abline(score_bty_lm)
+cor(evals$score, evals$bty_avg)
+```
+
+evaluating the conditions of least squares regression
+```{r}
+# variablity - constant
+plot(score_bty_lm$residuals ~ evals$bty_avg)
+abline(h = 0, lty = 4)  # adds a horizontal dashed line at y = 0
+# normality - left skewed
+hist(score_bty_lm$residuals)
+# linearity - data is positively linear
+qqnorm(score_bty_lm$residuals)
+qqline(score_bty_lm$residuals)
+```
+
+multiple linear regression using beauty and gender
+```{r}
+m_bty_gen <- lm(score ~ bty_avg + gender, data = evals)
+```
+
+evaluating the conditions for regression
+```{r}
+# normality -- qq plot
+qqnorm(m_bty_gen$residuals)
+qqline(m_bty_gen$residuals)
+# variablity -- residual plot
+plot(m_bty_gen$residuals ~ evals$bty_avg)
+abline(h = 0, lty = 4)
+# box plot
+plot(m_bty_gen$residuals ~ evals$gender)
+abline(h = 0, lty = 4)  # adds a horizontal dashed line at y = 0
+# historgram
+hist(m_bty_gen$residuals)
+
+plot(m_bty_gen)
+
+# linearity
+plot(jitter(evals$score) ~ evals$bty_avg)
+# box plot
+plot(evals$score ~ evals$gender)
+
+# residuals are left skewed
+# residuals have constant variability
+```
+
+formula for score with this multiple regression model is
+score = 3.74734 + 0.07416 * bty_avg  + 0.17239 * gendermale
+where gendermale = 1 for male
+thus, for the same beauty rating, male professors will gave higher score
+
+# testing linear model with beauty and rank
+```{r}
+lm_bty_rank = lm(score ~ bty_avg + rank, data = evals)
+summary(lm_bty_rank)
+```
+for rank, the model is considering the 3 levels as two different variables
+
+modeling out for all variables to determine which ones are significant and which are insignificant
+```{r}
+lm_all = lm(score ~ rank + ethnicity + gender + language + age + cls_perc_eval 
+             + cls_students + cls_level + cls_profs + cls_credits + bty_avg 
+             + pic_outfit + pic_color, data = evals)
+summary(lm_all)
+```
+p-value for clas_profs is highest (0.77806), making it the least impactful 
+
+
+testing by removing clas_profs, the variable with the highest p value
+```{r}
+lm_no_clsprofs <- lm(score ~ rank + ethnicity + gender + language + age + cls_perc_eval + 
+    cls_students + cls_level + cls_credits + bty_avg + pic_outfit + pic_color, 
+    data = evals)
+summary(lm_no_clsprofs)
+`# yes, there was some change. they are now more significant compared to with number of professors variable
+```
+
+removing all igh p-value variables and testing the model again to create a final model
+```{r}
+lm_final <- lm(score ~ gender + language + age + cls_perc_eval + 
+    cls_credits + bty_avg + pic_color, data = evals)
+summary(lm_final)
+```
+score = 3.967255 + 0.221457 * gender (where male = 1) - 0.281933 * language (where non-english = 1) - 0.005877 * age + 0.004295 * cls_perc_eval + 0.444392 * cls_credits (where one credit = 1) + 0.048679 * bty_avg - 0.216556 * pic_color (where color = 1)
+
+testing the final models efficacy
+```{r}
+# Normal
+qqnorm(lm_final$residuals)
+qqline(lm_final$residuals)
+
+# residuals vs fitted
+plot(lm_final)
+
+# histogram
+hist(lm_final$residuals)
+
+# linearity
+plot(jitter(evals$score) ~ evals$bty_avg)
+# boxplot
+plot(jitter(evals$score) ~ evals$gender)
+plot(jitter(evals$score) ~ evals$ethnicity)
+plot(jitter(evals$score) ~ evals$language
+     )
+
+plot(jitter(evals$score) ~ evals$age)
+plot(jitter(evals$score) ~ evals$cls_perc_eval)
+plot(jitter(evals$score) ~ evals$cls_credits)
+plot(jitter(evals$score) ~ evals$pic_color)
+```
+
+based on the model, to get a high score, the professor should
+1. be male
+2. have received education in english
+3. be younger
+4. have more student complete the evaluation
+5. should teach subjects with one credit
+6. have high beauty rating
+7. have a non-color picture
+
+
+
+
+
+
+
