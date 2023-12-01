@@ -1,0 +1,153 @@
+---
+title: "Regression, Mediation, Moderation"
+author: "Pranaya Jajoo"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+pulling data
+```{r}
+library(haven)
+df = read_spss('08_data.sav')
+head(df)
+df$type_work = factor(df$type_work, levels = 1:4, labels = c("secretary","assistant","manager","boss"))
+summary(df)
+```
+
+looking at leverage cut off score and leverage outliers
+```{r leverage}
+scrn = lm(OCB ~ cognitive + affective + years + type_work, data = df)
+summary(scrn)
+k = 6
+levelrage = hatvalues(scrn)
+cutl = (2*k + 2) / nrow(df)
+table(cutl)
+badl = levelrage > cutl
+table(badl)
+# leverage cutoff score is 0.0875
+# we have 7 leverage outliers
+```
+
+looking at Cook's cut off score and Cook's outliers
+```{r cooks}
+cooks = cooks.distance(scrn)
+cutc = 4 / (nrow(df) - k - 1)
+table(cutc)
+badc = cooks > cutc
+table(badc)
+# Cook's cutoff score is 0.0261437908496732
+# we have 9 Cook's outliers 
+```
+
+looking at Mahalnobis dataframe, cutoff score, and Mahanobis outliers
+```{r mahal}
+mahal = mahalanobis(df[,-1], colMeans(df[,-1]), cov(df[,-1]))
+cutm = qchisq(1-0.001, ncol(df[,-1]))
+table(cutm)
+badm = mahal > cutm
+table(badm)
+# Mahalnobis cutoff score is 18.4668269529032
+# we have 0 outliers for Mahalnobis
+```
+
+getting all outliers and removing them
+```{r overall}
+totalb = badl + badc + badm
+table(totalb)
+final = df[!df %in% df$totalout]
+wo_outlier = function(x, na.rm = TRUE, ...) {
+    qnt = quantile(x, probs = c(0.25 , 0.75), na.rm = na.rm, ...) 
+    H = 1.5 * IQR(x, na.rm = na.rm)
+    y = x
+    y[x < (qnt[1] - H)] = NA
+    y[x < (qnt[2] + H)] = NA
+    y
+  }
+# we have 16 outliers in total
+```
+
+testing for additivity 
+```{r additivity}
+nout = subset(df, totalb < 2)
+scrn1 = lm(OCB ~ cognitive + affective + years + type_work , data = nout)
+std = rstudent(scrn1)
+fit = scale(scrn1$fitted.values)
+summary(scrn1, correlation = T)
+```
+
+testing for linearity
+```{r linearity}
+{qqnorm(std)
+  abline(0,1)}
+```
+
+testing for normality
+```{r normality}
+hist(std)
+```
+
+testing for homogeneity and homoscedasticity
+```{r homogs}
+{plot(fit, std)
+  abline(0,0)
+  abline(v = 0)}
+# assumption for homogeneity has not been met
+# assumption for homoscedasticity has been met
+```
+
+testing hierarchical regression by adding variables individually    
+```{r hierarchical}
+s1 = lm(OCB ~ years, data = nout)
+s2 = lm(OCB ~ years + type_work,  data = nout)
+s3 = lm(OCB ~ years + type_work + cognitive + affective,  data = nout)
+summary(s1)
+summary(s2)
+summary(s3)
+anova(s1,s2,s3)
+```
+
+testing mediation model wherein the number of years mediates the relationship between affective measurements and OCB. performing the Sobel test
+```{r mediation}
+m1 = lm(OCB ~ affective, data = df)
+summary(m1)
+m2 = lm(years ~ affective, data = df)
+summary(m2)
+m3 = lm(OCB ~ affective + years, data = df)
+summary(m3)
+
+a = coef(m2)[2]
+b = coef(m3)[3]
+SEa = summary(m2)$coefficients[2,2]
+SEb = summary(m3)$coefficients[3,2]
+zscore = (a * b)/(sqrt((b^2*SEa ^2)+(a^2*SEb^2)+(SEa*SEb)))
+zscore
+
+total = coef(m1)[2]
+direct = coef(m3)[2]
+indirect = a*b
+indirects = function(formula2, formula3, dataset, random) {
+  d = dataset[random, ]
+  m2 = lm(formula2, data = d)
+  m = lm(formula3, data = d)
+  a = coef(m2)[2]
+  b = coef(m3)[3]
+  indirect = a*b
+  return(indirect)
+  }
+
+library(boot)
+boot = boot(data = df,
+                   statistic = indirects,
+                   formula2 = years ~ affective,
+                   formula3 = OCB ~ affective + years,
+                   R = 1000)
+boot
+```
+
+

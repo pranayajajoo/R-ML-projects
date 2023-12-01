@@ -1,0 +1,188 @@
+---
+title: "pj 500 project"
+author: "Pranaya Jajoo"
+date: "2023-11-05"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Accuracy
+# Outliers
+# label categorical variables
+
+
+
+adding dataset
+```{r}
+setwd("/Users/pranaya/Downloads")
+df = read.csv("/Users/pranaya/Downloads/insurance.csv")
+head(df)
+library(psych)
+describe(df)
+describeBy(df$charges,df$smoker)
+summary(df)
+```
+
+distribution of all variable (dependent + independent)
+
+```{r}
+p1<- ggplot(df, aes(x=bmi)) + geom_histogram(color="black", fill="blue", bins=10) + labs(title="BMI distribution")
+p2<- ggplot(df, aes(x=age)) + geom_histogram(color="black", fill="blue", bins=10) + labs(title="Age distribution")
+p3<- ggplot(df, aes(x=children)) + geom_histogram(color="black", fill="blue", bins=10)  + labs(title="Number of children distribution")
+p4<- ggplot(df, aes(x=smoker))  + geom_bar(color="black", fill="blue")  + labs(title="Smoker distribution")
+p5<- ggplot(df, aes(x=sex))  + geom_bar(color="black", fill="blue")  + labs(title="Sex distribution")
+p6<- ggplot(df, aes(x=region))  + geom_bar(color="black", fill="blue")  + labs(title="Region distribution")
+p7<-ggplot(df, aes(x=charges))+
+geom_histogram(color="black", fill="blue", bins=40)+
+geom_vline(aes(xintercept= 13270), color="red", linetype="dashed")+
+geom_vline(aes(xintercept= 9382), color="mediumorchid1", linetype="dashed")+
+annotate("text", x= 20000, y=100, size=3, label="Mean=13270", color="red")+
+annotate("text", x= 20000, y=130, size=3, label="Median=9382", color="mediumorchid1")+
+labs(title="Charges distribution")
+
+options(repr.plot.width=12, repr.plot.height=10)
+layout<-" 
+AB
+CD
+EF
+GG
+"
+p1 + p2 + p3 + p4+ p5 + p6+ p7+ plot_layout(design = layout)
+```
+
+
+charges X independent variables
+```{r}
+p1<-ggplot(df, aes(x=sex, y=charges)) +
+geom_boxplot(fill="blue") +
+stat_summary(fun=mean)  +
+labs(title="Sex x Charges") 
+
+p2<-ggplot(df, aes(x=age, y=charges)) +
+geom_jitter(alpha=0.3, size=2.5) +
+scale_color_manual("blue") +
+geom_rug() +
+geom_smooth(method=lm, formula=y~x) +
+labs(title="Age x Charges")
+
+p3<-ggplot(df, aes(x=region, y=charges)) +
+geom_boxplot(fill="blue") +
+stat_summary(fun=mean)  +
+labs(title="Region x Charges") 
+
+p4<-ggplot(df, aes(x=bmi, y=charges)) +
+geom_jitter(alpha=0.3, size=2.5) +
+scale_color_manual("blue") +
+geom_rug() +
+geom_smooth(method=lm, formula=y~x) +
+labs(title="BMI x Charges")
+
+p5<-ggplot(df, aes(x=smoker, y=charges)) +
+geom_boxplot(fill="blue") +
+stat_summary(fun=mean)  +
+labs(title="Smoker x Charges") 
+
+
+p6<-ggplot(df, aes(x=children, y=charges)) +
+geom_jitter(alpha=0.3, size=2.5) +
+scale_color_manual("blue") +
+geom_rug() +
+geom_smooth(method=lm, formula=y~x) +
+labs(title="Children x Charges")  
+
+options(repr.plot.width=12, repr.plot.height=10)
+layout<-" 
+AB
+CD
+EF"
+p1 + p2 + p3 + p4+ p5 + p6+ plot_layout(design = layout)
+```
+
+
+```{r}
+p1 <- ggplot(df[which(df$smoker == 'yes'), ], aes(x=charges))  + geom_histogram(color = "black", fill="blue")  + labs(title="Smoker charges distribution")
+
+p2 <- ggplot(df[which(df$smoker == 'no'), ], aes(x=charges))  + geom_histogram(color = "black", fill="blue")  + labs(title="Non-smoker charges distribution")
+
+layout<-" 
+AA
+BB"
+p1 + p2+ plot_layout(design = layout)
+
+```
+
+
+
+# Hypothesis: smoking impacts heathcare expenses
+
+```{r}
+t.test(df$bmi, mu = 30, alternative="two.sided") # alternative argument allows choose "less" and "greater" options (one-tailed test)
+t.test(df[which(df$smoker=="yes"), "charges"],
+       df[which(df$smoker=="no"), "charges"], alternative="two.sided", var.equal= TRUE)
+
+library(reshape)
+both_longdata = melt(df, id = c("smoker"), measured = c("charges"))
+t.test(value ~ variable, data = both_longdata, var.equal = FALSE, paired = FALSE)
+
+# test for NA
+which(is.na(df))
+
+#outliers
+out_test = df[, -c(2,5,6)]
+mahal_scores = mahalanobis(out_test, colMeans(out_test, na.rm=TRUE), cov(out_test, use ="pairwise.complete.obs"))
+mahal_cutoff = qchisq(1-.001,ncol(out_test))
+summary(mahal_scores < mahal_cutoff)
+without_outliers = subset(df, mahal_scores < mahal_cutoff)
+
+# multicollinearity and correlation matrix
+pairs.panels(without_outliers[c("age",  "bmi", "smoker")], digits = 2, cor = TRUE, main = "Insurance Scatterplot Matrix")
+# since r is less than <0.2 in all cases, the pairwise correlations between age, bmi, and smoker status is not particularly strong and there is no multicollinearity
+
+# test for normality
+shapiro.test(df$bmi)
+shapiro.test(df$age)
+# since p value is less than 0.05, the data can be considered to be normally distributed
+
+#homogeneity and homoscedasticity
+
+
+# multicollinearity and correlation matric
+pairs.panels(without_outliers[c("age",  "bmi", "smoker")], digits = 2, cor = TRUE, main = "Insurance Scatterplot Matrix")
+# since r is less than <0.2 in all cases, the pairwise correlations between age, bmi, and smoker status is not particularly strong and there is no multicollinearity
+
+```
+
+```{r collinearity}
+cor.test(df$charges, df$age, method="kendall") # Spearman cannot compute exact p-value with ties
+
+```
+
+```{r linear regression}
+model_age <- lm(charges ~ age, data = df)
+summary(model_age)
+model_bmi <- lm(charges ~ bmi, data = df)
+summary(model_bmi)
+model_smoker <- lm(charges ~ smoker, data = df)
+summary(model_smoker)
+```
+
+
+```{r multiple regression}
+test_model_1 = lm(charges ~ age + sex + bmi + children + smoker + region, data = df)
+summary(test_model_1)
+
+test_model_2 = lm(charges ~ age + bmi + smoker, data = df)
+summary(test_model_2)
+```
+
+```{ r validating the accuracy of the model}
+try this link - https://www.kaggle.com/code/sinaasappel/tutorial-multiple-regression
+```
+
+
+
+
