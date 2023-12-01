@@ -1,0 +1,299 @@
+---
+title: "Health as it related to Demographic, Socioeconomic, Physical, and Other variables"
+output: html_document
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#load libraries into R
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(recipes)
+library(gridExtra)
+library(MASS)
+```
+
+An Analysis of Lower Confidence Intervals of Health Indicator Across Demographic Factors, Socioeconomic Status, Health Categories, and other Explanatory Variables
+```{r}
+npaobfss_df <- read_csv("health data.csv")
+
+#glimpse of the dataset
+head(npaobfss_df)
+```
+
+
+
+
+
+
+```{r}
+#we are focusing on state-level, hence filter out national data
+npaobfss_df <- npaobfss_df %>%
+  filter(LocationDesc != "National")
+
+#select variables of interest
+colnames <- c("Low_Confidence_Limit","YearStart", "LocationAbbr", "Class", "Education", "Gender", "Income", "Race/Ethnicity","Age(years)","GeoLocation")
+npaobfss_df <- npaobfss_df[, colnames]
+```
+
+
+```{r}
+#check proportion of missing values
+as.data.frame(colSums(is.na(npaobfss_df)) / nrow(npaobfss_df) * 100)
+```
+
+```{r}
+# Drop columns with significant missing values
+columns_to_drop <- c("Gender", "Education", "Income", "Race/Ethnicity")
+npaobfss_df <- npaobfss_df[, !(names(npaobfss_df) %in% columns_to_drop)]
+
+# Drop all rows with missing values
+npaobfss_df<- na.omit(npaobfss_df)
+
+```
+
+```{r}
+# Remove the brackets and split the string into a character vector
+npaobfss_df$latitude <- sapply(strsplit(gsub("[()]", "", npaobfss_df$GeoLocation), ", "), function(x) as.numeric(x[1]))
+npaobfss_df$longitude <- sapply(strsplit(gsub("[()]", "", npaobfss_df$GeoLocation), ", "), function(x) as.numeric(x[2]))
+
+#convert to factors
+npaobfss_df$YearStart <- as.factor(npaobfss_df$YearStart)
+npaobfss_df$LocationAbbr <- as.factor(npaobfss_df$LocationAbbr)
+npaobfss_df$Class <- as.factor(npaobfss_df$Class)
+npaobfss_df$AgeGroup <- as.factor(npaobfss_df$`Age(years)`)
+
+#drop geolocation column
+columns_to_drop <- c("GeoLocation", "Age(years)")
+npaobfss_df <- npaobfss_df[, !(names(npaobfss_df) %in% columns_to_drop)]
+
+# Print the data frame
+print(npaobfss_df)
+
+```
+
+```{r}
+#check number of levels in class
+unique(npaobfss_df$Class)
+unique(npaobfss_df$YearStart)
+```
+
+Explanatory Data Analysis
+
+```{r fig.height=7, fig.width=12}
+avg_confl <- npaobfss_df %>%
+  group_by(YearStart) %>%
+  summarize(Avg_Low_Confidence_Limit = mean(Low_Confidence_Limit))
+
+avg_class <- npaobfss_df %>%
+  group_by(Class) %>%
+  summarize(Avg_Low_Confidence_Limit = mean(Low_Confidence_Limit))
+
+avg_age <- npaobfss_df %>%
+  group_by(AgeGroup) %>%
+  summarize(Avg_Low_Confidence_Limit = mean(Low_Confidence_Limit))
+avg_loc <- npaobfss_df %>%
+  group_by(LocationAbbr) %>%
+  summarize(Avg_Low_Confidence_Limit = mean(Low_Confidence_Limit))
+
+plt.1 <- ggplot(avg_confl, aes(x = YearStart, y = Avg_Low_Confidence_Limit)) +
+  geom_bar(stat = "identity", position = "dodge", fill ="blue") +
+  labs(title = "Lower Confidence Limit of Health Impact by Year", x = "Year", y = "Lower Confidence Limit")+
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+plt.2 <- ggplot(avg_class, aes(x = Class, y = Avg_Low_Confidence_Limit)) +
+  geom_bar(stat = "identity", position = "dodge", fill ="blue") +
+  labs(title = "Lower Confidence Limit of Health Impact by Class", x = "Lower Confidence Limit", y = "Class")+
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+plt.3 <- ggplot(avg_age, aes(x = AgeGroup, y = Avg_Low_Confidence_Limit)) +
+  geom_bar(stat = "identity", position = "dodge", fill ="blue") +
+  labs(title = "Lower Confidence Limit of Health Impact by Age", x = "Lower Confidence Limit", y = "Age Group")+
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+plt.4 <- ggplot(avg_loc, aes(x = reorder(LocationAbbr, -Avg_Low_Confidence_Limit), y = Avg_Low_Confidence_Limit)) +
+  geom_bar(stat = "identity", position = "dodge", fill ="blue") +
+  labs(title = "Lower Confidence Limit of Health Impact by Location", x = "Lower Confidence Limit", y = "Location")+
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  theme(plot.title = element_text(hjust = 0.5))
+
+grid.arrange(plt.1,plt.2,plt.3,plt.4)
+
+```
+```{r fig.height=7, fig.width=12}
+plt.5<- ggplot(npaobfss_df, aes(x = Class, y = Low_Confidence_Limit, fill = Class)) +
+  geom_boxplot() +
+  labs(title = "Confidence Limits by Class", x = "Class", y = "Confidence Limit")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  theme(plot.title = element_text(hjust = 0.5))
+plt.6<- ggplot(npaobfss_df, aes(x = LocationAbbr, y = Low_Confidence_Limit)) +
+  geom_boxplot() +
+  labs(title = "Confidence Limits by Location", x = "Location", y = "Confidence Limit")+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  theme(plot.title = element_text(hjust = 0.5))
+plt.7<- ggplot(npaobfss_df, aes(x = YearStart, y = Low_Confidence_Limit, fill = YearStart)) +
+  geom_boxplot() +
+  labs(title = "Confidence Limits by Year", x = "Year", y = "Confidence Limit")+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  theme(plot.title = element_text(hjust = 0.5))
+plt.8<- ggplot(npaobfss_df, aes(x = AgeGroup, y = Low_Confidence_Limit, fill = AgeGroup)) +
+  geom_boxplot() +
+  labs(title = "Confidence Limits by Age Group", x = "Age Group", y = "Confidence Limit")+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+
+  theme(plot.title = element_text(hjust = 0.5))
+grid.arrange(plt.5,plt.6,plt.7,plt.8)
+
+```
+
+
+```{r fig.height=8, fig.width=7}
+#filter by age group - 65 or older:
+age_18 <- npaobfss_df %>% filter(AgeGroup == "18 - 24")
+age_25 <- npaobfss_df %>% filter(AgeGroup == "25 - 34")
+age_35 <- npaobfss_df %>% filter(AgeGroup == "35 - 44")
+age_45 <- npaobfss_df %>% filter(AgeGroup == "45 - 54")
+age_55<- npaobfss_df %>% filter(AgeGroup == "55 - 64")
+age_65 <- npaobfss_df %>% filter(AgeGroup == "65 or older")
+
+plt.9<- ggplot(age_18, aes(x = Class, y = Low_Confidence_Limit)) +
+  geom_boxplot() +
+  labs(title = "Confidence Limits by Class - 18-24", x = "Class", y = "Confidence Limit")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  theme(plot.title = element_text(hjust = 0.5))
+plt.10<- ggplot(age_25, aes(x = Class, y = Low_Confidence_Limit)) +
+  geom_boxplot() +
+  labs(title = "Confidence Limits by Class - 25-34", x = "Class", y = "Confidence Limit")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  theme(plot.title = element_text(hjust = 0.5))
+plt.11<- ggplot(age_35, aes(x = Class, y = Low_Confidence_Limit)) +
+  geom_boxplot() +
+  labs(title = "Confidence Limits by Class - 35-44", x = "Class", y = "Confidence Limit")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  theme(plot.title = element_text(hjust = 0.5))
+plt.12<- ggplot(age_45, aes(x = Class, y = Low_Confidence_Limit)) +
+  geom_boxplot() +
+  labs(title = "Confidence Limits by Class - 45-54", x = "Class", y = "Confidence Limit")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  theme(plot.title = element_text(hjust = 0.5))
+plt.13<- ggplot(age_55, aes(x = Class, y = Low_Confidence_Limit)) +
+  geom_boxplot() +
+  labs(title = "Confidence Limits by Class - 55-64r", x = "Class", y = "Confidence Limit")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  theme(plot.title = element_text(hjust = 0.5))
+
+plt.14<- ggplot(age_65, aes(x = Class, y = Low_Confidence_Limit)) +
+  geom_boxplot() +
+  labs(title = "Confidence Limits by Class - 65 or older", x = "Class", y = "Confidence Limit")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+grid.arrange(plt.9,plt.10,plt.11,plt.12,plt.13,plt.14, ncol =2)
+
+```
+
+
+
+
+
+
+
+
+
+
+```{r fig.height=5, fig.width=7}
+#select numeric variables
+num_df<- npaobfss_df[sapply(npaobfss_df, is.numeric)]
+pairs(num_df, panel=panel.smooth)
+```
+```{r}
+cor(num_df)
+```
+
+
+
+
+
+
+
+
+
+
+
+Data Preprocessing and Feature Engineering
+
+```{r message=FALSE, warning=FALSE}
+# Define a function to remove outliers
+remove_outliers <- function(data, columns, range_factor = 1.5) {
+  data %>%
+    filter(across(all_of(columns), ~ . >= quantile(., 0.25) - range_factor * IQR(.) &
+                                      . <= quantile(., 0.75) + range_factor * IQR(.)))
+}
+numeric_columns <- colnames(num_df)
+clean_data <- remove_outliers(npaobfss_df, numeric_columns)
+
+
+#split data into training and testing set
+set.seed(123)
+tr.id <- sample(1:nrow(clean_data), nrow(clean_data)/8)
+training_set <- clean_data[-tr.id, ]
+testing_set <- clean_data[tr.id, ]
+
+# Create a recipe with ID and response variables
+rec <- recipe(Low_Confidence_Limit ~., data=training_set) %>%
+  step_dummy(all_nominal(), -all_outcomes(),one_hot = FALSE)%>% #set to false to drop one variable and avoid multicollinearity
+  step_corr(all_numeric_predictors(), threshold = 0.90)%>%
+  prep()
+training_data <- bake(rec, new_data = training_set)
+testing_data <- bake(rec, new_data = testing_set)
+```
+
+
+
+Multiple Regression Model
+
+```{r}
+#build full model
+full.model <- lm(Low_Confidence_Limit ~., data=training_data)
+summary(full.model)
+```
+
+```{r}
+#summary of best model
+set.seed(1234)
+best.model <- stepAIC(full.model, direction = "both", 
+                      trace = FALSE, alpha = 0.05)
+summary(best.model)
+```
+
+
+```{r fig.height=6, fig.width=6}
+par(mfrow = c(2, 2))
+plot(best.model)
+```
+
+```{r}
+
+testing_data$pred <- predict(best.model, newdata = testing_data)
+#plot actual vs fitted plot
+ggplot(testing_data,                                     # Draw plot using ggplot2 package
+       aes(x = pred,
+           y = Low_Confidence_Limit)) +
+  geom_point() +
+  labs(title = "Actual vs Fitted Plot", x = "Predicted", y = "Actual")+
+  geom_abline(intercept = 0,
+              slope = 1,
+              color = "red",
+              size = 2)+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
